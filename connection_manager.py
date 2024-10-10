@@ -90,18 +90,24 @@ class ConnectionManager:
 
         Outside callers should call close() instead.
         """
+        _LOGGER.debug("Called destroy_socket()")
         self.set_connection_state(False)
         if self._socket_writer is None:
           # no socket to destroy
+          _LOGGER.debug("No socket to destory")
           return
 
         if not self._socket_writer.is_closing():
+            _LOGGER.debug("Requesting socket close")
             self._socket_writer.close()  # writer controls the underlying socket
 
         # ignore connection errors when we're trying to close the connection
         # anyways
         with contextlib.suppress(ConnectionError):
+            _LOGGER.debug("Waiting for socket close")
             await self._socket_writer.wait_closed()
+
+        _LOGGER.debug("Socket closed ok")
 
     async def close(self):
         """Request close of this conn manager."""
@@ -114,10 +120,13 @@ class ConnectionManager:
             if self._socket_writer:
                 await self._socket_writer.wait_closed()
 
+        _LOGGER.debug("Conn manager closed ok")
+
+    class TGErr(Exception):
+        """Artificial exception to kill task group."""
+
     async def ping_watchdog(self, task_group_to_cancel: asyncio.TaskGroup):
         """Run a continuous check that the connection isn't dead."""
-        class TGErr(Exception):
-            """Artificial exception to kill task group."""
 
         async def kill_task_group_task():
             raise TGErr
@@ -145,6 +154,8 @@ class ConnectionManager:
         finally:
             _LOGGER.debug("Stopping ping watchdog")
 
+        return
+
     async def send(self, data: dict):
         """Send some data over the socket, if connected."""
         if self._socket_writer:
@@ -169,7 +180,10 @@ class ConnectionManager:
                     bad_messages = 0  # track consecutive bad messages
                     while self._is_connected and not is_eof and not self._should_close:
                         try:
-                            msg = await self._recv_fn(self._socket_reader)
+                            # If we wait for more than two seconds, cancel the
+                            # attempt and try again. This means that we'll
+                            # reevaluate should_close
+                            msg = await asyncio.wait_for(self._recv_fn(self._socket_reader), timeout=2.0)
                             if msg is None:
                                 _LOGGER.debug("Got EOF")
                                 is_eof = True
@@ -184,6 +198,8 @@ class ConnectionManager:
                                 )
                                 await self.reconnect()
                                 bad_messages = 0
+                            continue
+                        except TimeoutError: 
                             continue
 
                         bad_messages = 0
@@ -205,20 +221,43 @@ class ConnectionManager:
                         await self.send(d)
                 except asyncio.CancelledError:
                     _LOGGER.debug("Send task got cancellation; cleaning up")
-                except Exception as e: # noqa: BLE001
-                    _LOGGER.error(str(e))
                 finally:
                     _LOGGER.debug("Exited send loop")
 
             watchdog_task = None
-            async with asyncio.TaskGroup() as tg:
-                tg.create_task(do_net_loop())
-                tg.create_task(send_loop())
+            try:
+                #async with asyncio.TaskGroup() as tg:
+                #    _LOGGER.debug("Created task group")
+                #    net_loop_task = tg.create_task(do_net_loop())
+                #    send_loop_task = tg.create_task(send_loop())
+
+                #    watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
+                #    _LOGGER.debug("Created watchdog task")
+
+                net_loop_task =  asyncio.create_task(do_net_loop())
+                send_loop_task = asyncio.create_task(send_loop())
 
                 watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
+                _LOGGER.debug("Created watchdog task")
 
+                _LOGGER.debug("Waiting on rec/send tasks")
+                await asyncio.gather(
+                        net_loop_task,
+                        send_loop_task)
+
+                _LOGGER.debug("Waiting on watchdog")
+                watchdog_task.cancel()
+                await watchdog_task
+                _LOGGER.debug("Watchdog done")
+
+            except* TGErr:
+                _LOGGER.debug("TGErr")
+                pass
+
+            _LOGGER.debug("Cancelling watchdog task")
             watchdog_task.cancel()
             await watchdog_task
+            _LOGGER.debug("Watchdog task awaited ok")
 
             _LOGGER.warning("Disconnected from %s:%d; will reconnect",
                             self._host, self._port)
