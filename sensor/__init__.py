@@ -17,8 +17,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import generate_entity_id
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from . import init_entity
-from .const import STATE_DETECTED, STATE_ERROR, STATE_LISTENING
+from .. import init_entity
+from ..const import STATE_DETECTED, STATE_ERROR, STATE_LISTENING
 
 _LOGGER = logging.getLogger(__name__)
 
