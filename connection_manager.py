@@ -17,6 +17,7 @@ MAX_CONSECUTIVE_BAD_MESSAGES = 5
 # How long to wait until we assume the connection has died
 TIMEOUT_SECS = 15
 
+
 class ConnectionManager:
     """Manages a connection, including reconnects.
 
@@ -66,8 +67,7 @@ class ConnectionManager:
         """Connect to the target, or reconnect a dropped connection."""
         if self._is_connected:
             _LOGGER.debug(
-                "Already connected to %s:%d, reconnecting",
-                self._host, self._port
+                "Already connected to %s:%d, reconnecting", self._host, self._port
             )
             await self.destroy_socket()
 
@@ -78,11 +78,13 @@ class ConnectionManager:
             )
             self.set_connection_state(True)
             _LOGGER.debug("Connected to %s:%d", self._host, self._port)
-        except Exception as e: # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             self.set_connection_state(False)
             _LOGGER.error(
                 "Encountered an error trying to connect to %s:%d: %s",
-                self._host, self._port, repr(e)
+                self._host,
+                self._port,
+                repr(e),
             )
 
     async def destroy_socket(self):
@@ -93,9 +95,9 @@ class ConnectionManager:
         _LOGGER.debug("Called destroy_socket()")
         self.set_connection_state(False)
         if self._socket_writer is None:
-          # no socket to destroy
-          _LOGGER.debug("No socket to destory")
-          return
+            # no socket to destroy
+            _LOGGER.debug("No socket to destory")
+            return
 
         if not self._socket_writer.is_closing():
             _LOGGER.debug("Requesting socket close")
@@ -140,10 +142,11 @@ class ConnectionManager:
                 diff = int(now - self._most_recent_message_timestamp)
                 if diff > TIMEOUT_SECS:
                     _LOGGER.warning(
-                            "Last message from %s is %d seconds old. "
-                            "Assuming connection is dead",
-                            self._host,
-                            diff)
+                        "Last message from %s is %d seconds old. "
+                        "Assuming connection is dead",
+                        self._host,
+                        diff,
+                    )
                     self.set_connection_state(False)
                     task_group_to_cancel.create_task(kill_task_group_task())
                     _LOGGER.debug("Leaving ping watchdog")
@@ -183,7 +186,9 @@ class ConnectionManager:
                             # If we wait for more than two seconds, cancel the
                             # attempt and try again. This means that we'll
                             # reevaluate should_close
-                            msg = await asyncio.wait_for(self._recv_fn(self._socket_reader), timeout=2.0)
+                            msg = await asyncio.wait_for(
+                                self._recv_fn(self._socket_reader), timeout=2.0
+                            )
                             if msg is None:
                                 _LOGGER.debug("Got EOF")
                                 is_eof = True
@@ -199,7 +204,7 @@ class ConnectionManager:
                                 await self.reconnect()
                                 bad_messages = 0
                             continue
-                        except TimeoutError: 
+                        except TimeoutError:
                             continue
 
                         bad_messages = 0
@@ -207,7 +212,7 @@ class ConnectionManager:
                     _LOGGER.warning("Connection to %s:%d lost", self._host, self._port)
                 except asyncio.CancelledError:
                     _LOGGER.debug("Got cancellation from watchdog, aborting")
-                except Exception as e: # noqa: BLE001
+                except Exception as e:  # noqa: BLE001
                     _LOGGER.error("Unexpected exception: %s", repr(e))
                 finally:
                     _LOGGER.debug("Exited rec loop")
@@ -226,7 +231,7 @@ class ConnectionManager:
 
             watchdog_task = None
             try:
-                #async with asyncio.TaskGroup() as tg:
+                # async with asyncio.TaskGroup() as tg:
                 #    _LOGGER.debug("Created task group")
                 #    net_loop_task = tg.create_task(do_net_loop())
                 #    send_loop_task = tg.create_task(send_loop())
@@ -234,16 +239,14 @@ class ConnectionManager:
                 #    watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
                 #    _LOGGER.debug("Created watchdog task")
 
-                net_loop_task =  asyncio.create_task(do_net_loop())
+                net_loop_task = asyncio.create_task(do_net_loop())
                 send_loop_task = asyncio.create_task(send_loop())
 
                 watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
                 _LOGGER.debug("Created watchdog task")
 
                 _LOGGER.debug("Waiting on rec/send tasks")
-                await asyncio.gather(
-                        net_loop_task,
-                        send_loop_task)
+                await asyncio.gather(net_loop_task, send_loop_task)
 
                 _LOGGER.debug("Waiting on watchdog")
                 watchdog_task.cancel()
@@ -259,8 +262,9 @@ class ConnectionManager:
             await watchdog_task
             _LOGGER.debug("Watchdog task awaited ok")
 
-            _LOGGER.warning("Disconnected from %s:%d; will reconnect",
-                            self._host, self._port)
+            _LOGGER.warning(
+                "Disconnected from %s:%d; will reconnect", self._host, self._port
+            )
             await asyncio.sleep(2)
 
         _LOGGER.info("Shutting down connection to %s:%d", self._host, self._port)
