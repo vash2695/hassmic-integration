@@ -35,9 +35,6 @@ class WhichSensor(enum.StrEnum):
     # Intent of curent run
     INTENT = "intent"
 
-    # Text-to-speech of current run
-    TTS = "tts"
-
     # Overall current pipeline state
     STATE = "state"
 
@@ -128,7 +125,10 @@ class hassmicSensorEntity(SensorEntity):
                     stt_out = event.data.get("stt_output", None)
                     if stt_out:
                         txt = stt_out.get("text", None)
-                        self._attr_native_value = txt
+                        self._attr_native_value = (
+                            txt if len(txt) <= 255
+                            else (txt[:252] + "...").strip()
+                            )
 
             # Do nothing for INTENT_START
             case PipelineEventType.INTENT_START:
@@ -163,11 +163,13 @@ class hassmicSensorEntity(SensorEntity):
                     if not speech or not speech_type:
                         _LOGGER.warning("No speech found in intent output")
 
-                    self._attr_native_value = speech
+                    self._attr_native_value = (
+                        speech if len(speech) <= 255
+                        else (speech[:252] + "...").strip()
+                        )
                     self._attr_extra_state_attributes = {
-                            **resp,
-                            "speech_type": speech_type,
-                            "conversation_id": conversation_id,
+                            **event.data,
+                            'speech_output': speech,
                     }
 
             # Do nothing for TTS_START
@@ -176,12 +178,7 @@ class hassmicSensorEntity(SensorEntity):
 
             # TTS_END has the media URL
             case PipelineEventType.TTS_END:
-                if self._key == WhichSensor.TTS:
-                    if o := event.data.get("tts_output"):
-                        self._attr_native_value = o.get("media_id", None)
-                        self._attr_extra_state_attributes = o
-                    else:
-                        _LOGGER.warning("No tts_output found in TTS_END event")
+                pass
 
 
 
