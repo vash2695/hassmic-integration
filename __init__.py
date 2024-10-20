@@ -14,15 +14,16 @@ from .hassmic import HassMic
 
 _LOGGER = logging.getLogger(__name__)
 
+
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up hassmic from a config entry."""
 
     dr = device_registry.async_get(hass)
 
     device = dr.async_get_or_create(
-        config_entry_id = entry.entry_id,
-        name = entry.title,
-        identifiers = {(const.DOMAIN, entry.unique_id)}
+        config_entry_id=entry.entry_id,
+        name=entry.title,
+        identifiers={(const.DOMAIN, entry.unique_id)},
     )
     _LOGGER.debug("Device id: %s", device.id)
     # Create a HassMic instance and keep it in the runtime_data of the
@@ -48,9 +49,7 @@ def init_entity(entity: Entity, key: str, config_entry: ConfigEntry) -> str:
     unique_id = config_entry.unique_id
     entity.unique_id = f"{unique_id}-{key}"
     entity.name = config_entry.title + " " + key.upper().replace("_", " ")
-    entity.icon = const.PROPERTIES_META_INFO.get(key, {}).get(
-        "icon", "mdi:numeric-0"
-    )
+    entity.icon = const.PROPERTIES_META_INFO.get(key, {}).get("icon", "mdi:numeric-0")
     entity.device_info = DeviceInfo(
         identifiers={(const.DOMAIN, unique_id)},
     )

@@ -29,13 +29,14 @@ MESSAGE_TYPE_AUDIO_CHUNK = "audio-chunk"
 
 _LOGGER = logging.getLogger(__name__)
 
+
 class MessageType(enum.Enum):
     """The list of possible message types."""
 
-    UNKNOWN     = None
+    UNKNOWN = None
     AUDIO_CHUNK = "audio-chunk"
     CLIENT_INFO = "client-info"
-    PING        = "ping"
+    PING = "ping"
 
 
 class Message:
@@ -65,27 +66,24 @@ class HassMic:
 
     @staticmethod
     async def async_validate_connection_params(host: str, port: int) -> str:
-        """"Validate the connection parameters and return the UUID of the host.
+        """ "Validate the connection parameters and return the UUID of the host.
 
         Raise an exception if target is invalid.
         """
 
-
         _LOGGER.debug("Trying to validate connection to %s:%d", host, port)
         reader, writer = await asyncio.open_connection(host, port)
         try:
-          async with asyncio.timeout(2):
-            m = await HassMic.recv_message(reader)
-            if m.message_type == MessageType.CLIENT_INFO:
-              if (uuid := m.data.get("uuid")) is not None:
-                return uuid
-            raise BadHassMicClientInfoException
+            async with asyncio.timeout(2):
+                m = await HassMic.recv_message(reader)
+                if m.message_type == MessageType.CLIENT_INFO:
+                    if (uuid := m.data.get("uuid")) is not None:
+                        return uuid
+                raise BadHassMicClientInfoException
         # Finally is executed regardless of result
         finally:
-          writer.close()
-          await writer.wait_closed()
-
-
+            writer.close()
+            await writer.wait_closed()
 
     def __init__(self, hass: HomeAssistant, entry: ConfigEntry, device: DeviceEntry):
         """Initialize the instance."""
@@ -107,21 +105,21 @@ class HassMic:
             connection_state_callback=self._handle_connection_state_change,
         )
 
-        self._pipeline_manager = PipelineManager(hass, entry, self._device, self._pipeline_event_callback)
-
-        entry.async_create_background_task(
-            hass,
-            self._connection_manager.run(), name="hassmic_connection"
+        self._pipeline_manager = PipelineManager(
+            hass, entry, self._device, self._pipeline_event_callback
         )
 
         entry.async_create_background_task(
-            hass,
-            self._pipeline_manager.run(), name="hassmic_pipeline"
+            hass, self._connection_manager.run(), name="hassmic_connection"
+        )
+
+        entry.async_create_background_task(
+            hass, self._pipeline_manager.run(), name="hassmic_pipeline"
         )
 
     def register_entity(self, ent: Entity):
-      """Add an entity to the list of entities generated for this hassmic."""
-      self._entities.append(ent)
+        """Add an entity to the list of entities generated for this hassmic."""
+        self._entities.append(ent)
 
     def _pipeline_event_callback(self, event: PipelineEvent):
         """Update states in response to pipeline event.
@@ -130,24 +128,29 @@ class HassMic:
         """
         _LOGGER.debug("Got pipeline event: %s", repr(event))
 
-        if event.type is PipelineEventType.TTS_END and (o := event.data.get("tts_output")):
+        if event.type is PipelineEventType.TTS_END and (
+            o := event.data.get("tts_output")
+        ):
             path = o.get("url")
             urlbase = None
             try:
-              urlbase = get_url(self._hass)
+                urlbase = get_url(self._hass)
             except NoURLAvailableError:
-              _LOGGER.error(
-                  "Failed to get a working URL for this Home Assistant "
-                  "instance; can't send TTS URL to hassmic")
+                _LOGGER.error(
+                    "Failed to get a working URL for this Home Assistant "
+                    "instance; can't send TTS URL to hassmic"
+                )
 
             if path and urlbase:
                 _LOGGER.debug("Play URL: '%s'", urlbase + path)
-                self._connection_manager.send_enqueue({
-                    "type": "play-tts",
-                    "data": {
-                        "url": urlbase + path,
-                    },
-                })
+                self._connection_manager.send_enqueue(
+                    {
+                        "type": "play-tts",
+                        "data": {
+                            "url": urlbase + path,
+                        },
+                    }
+                )
             else:
                 _LOGGER.warning(
                     "Can't play TTS: (%s) or URL Base (%s) not found",
@@ -189,9 +192,9 @@ class HassMic:
 
             case MessageType.AUDIO_CHUNK:
                 # handle audio data
-                #rate = m.data.get("rate")
-                #width = m.data.get("width")
-                #channels = m.data.get("channels")
+                # rate = m.data.get("rate")
+                # width = m.data.get("width")
+                # channels = m.data.get("channels")
                 self._pipeline_manager.enqueue_chunk(m.payload)
 
             case MessageType.CLIENT_INFO:
@@ -201,7 +204,9 @@ class HassMic:
                 pass
 
             case _:
-                _LOGGER.error("Got unhandled (but known) message type %s", m.message_type.name)
+                _LOGGER.error(
+                    "Got unhandled (but known) message type %s", m.message_type.name
+                )
 
         return m
 

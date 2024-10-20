@@ -41,6 +41,7 @@ class WhichSensor(enum.StrEnum):
     # Overall current pipeline state
     PIPELINE_STATE = "pipeline_state"
 
+
 async def async_setup_entry(
     hass: HomeAssistant,
     config_entry: ConfigEntry,
@@ -48,7 +49,9 @@ async def async_setup_entry(
 ) -> None:
     """Initialize hassmic config entry for sensors."""
 
-    async_add_entities([hassmicSensorEntity(hass, config_entry, key) for key in WhichSensor])
+    async_add_entities(
+        [hassmicSensorEntity(hass, config_entry, key) for key in WhichSensor]
+    )
 
 
 class hassmicSensorEntity(SensorEntity):
@@ -57,22 +60,25 @@ class hassmicSensorEntity(SensorEntity):
     _attr_native_value = STATE_IDLE
     _attr_should_poll = False
 
-    def __init__(self, hass: HomeAssistant, config_entry: ConfigEntry, key: WhichSensor) -> None:
+    def __init__(
+        self, hass: HomeAssistant, config_entry: ConfigEntry, key: WhichSensor
+    ) -> None:
         """Initialize hassmic Sensor."""
         super().__init__()
         init_entity(self, key.value, config_entry)
         self._key: WhichSensor = key
 
         id_candidate = re.sub(
-                r"[^A-Za-z0-9_]", "_", f"{config_entry.title}_{key.value}".lower())
+            r"[^A-Za-z0-9_]", "_", f"{config_entry.title}_{key.value}".lower()
+        )
         self.entity_id = generate_entity_id(ENTITY_ID_FORMAT, id_candidate, hass=hass)
 
     def handle_connection_state_change(self, new_state: bool):
-      """Handle a connection state change."""
-      self.available = new_state
-      self.schedule_update_ha_state()
+        """Handle a connection state change."""
+        self.available = new_state
+        self.schedule_update_ha_state()
 
-    def handle_pipeline_event(self, event: PipelineEvent): # noqa: C901
+    def handle_pipeline_event(self, event: PipelineEvent):  # noqa: C901
         """Handle a `PipelineEvent` and perform any required state updates.
 
         This is called on *every* sensor for *every* pipeline event.
@@ -81,7 +87,7 @@ class hassmicSensorEntity(SensorEntity):
         # if we're not connected (sensor is unavailable), ignore pipeline state
         # updates
         if not self.available:
-          return
+            return
 
         # For the pipeline state sensor, just set the state to the event type
         # and don't do any processing.
@@ -95,6 +101,7 @@ class hassmicSensorEntity(SensorEntity):
         # This translates key events in the pipeline into more-easily-parsible
         # "stage-status" strings.
         if self._key == WhichSensor.SIMPLE_STATE:
+
             def getSimpleState() -> str:
                 match event.type:
                     case PipelineEventType.ERROR:
@@ -116,14 +123,12 @@ class hassmicSensorEntity(SensorEntity):
             if s is not None:
                 self._attr_native_value = getSimpleState()
 
-
-
         match event.type:
             # TODO - figure out what the best thing to do with run_start and
             # run_end is.
             #
             ## If we're starting or ending a pipeline, reset all the sensors.
-            #case PipelineEventType.RUN_START | PipelineEventType.RUN_END:
+            # case PipelineEventType.RUN_START | PipelineEventType.RUN_END:
             #    self._attr_native_value = STATE_IDLE
 
             # If we encountered an error, set all sensors to error
@@ -136,8 +141,8 @@ class hassmicSensorEntity(SensorEntity):
                 if self._key == WhichSensor.WAKE:
                     self._attr_native_value = STATE_LISTENING
                     self._attr_extra_state_attributes = {
-                            "entity_id": event.data.get("entity_id", None)
-                            }
+                        "entity_id": event.data.get("entity_id", None)
+                    }
 
             case PipelineEventType.WAKE_WORD_END:
                 if self._key == WhichSensor.WAKE:
@@ -155,9 +160,8 @@ class hassmicSensorEntity(SensorEntity):
                     if stt_out:
                         txt = stt_out.get("text", None)
                         self._attr_native_value = (
-                            txt if len(txt) <= 255
-                            else (txt[:252] + "...").strip()
-                            )
+                            txt if len(txt) <= 255 else (txt[:252] + "...").strip()
+                        )
                         self._attr_extra_state_attributes = {
                             "speech": txt,
                         }
@@ -171,7 +175,9 @@ class hassmicSensorEntity(SensorEntity):
                 if self._key == WhichSensor.INTENT:
                     iout = event.data.get("intent_output", None)
                     if iout is None:
-                        _LOGGER.warning("Got no intent_output data from INTENT_END event")
+                        _LOGGER.warning(
+                            "Got no intent_output data from INTENT_END event"
+                        )
                         return
                     response = iout.get("response", None)
                     conversation_id = iout.get("conversation_id", None)
@@ -196,12 +202,11 @@ class hassmicSensorEntity(SensorEntity):
                         _LOGGER.warning("No speech found in intent output")
 
                     self._attr_native_value = (
-                        speech if len(speech) <= 255
-                        else (speech[:252] + "...").strip()
-                        )
+                        speech if len(speech) <= 255 else (speech[:252] + "...").strip()
+                    )
                     self._attr_extra_state_attributes = {
                         **event.data,
-                        'speech_output': speech,
+                        "speech_output": speech,
                     }
 
             # Do nothing for TTS_START
@@ -212,7 +217,4 @@ class hassmicSensorEntity(SensorEntity):
             case PipelineEventType.TTS_END:
                 pass
 
-
-
         self.schedule_update_ha_state()
-

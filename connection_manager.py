@@ -17,6 +17,7 @@ MAX_CONSECUTIVE_BAD_MESSAGES = 5
 # How long to wait until we assume the connection has died
 TIMEOUT_SECS = 15
 
+
 class ConnectionManager:
     """Manages a connection, including reconnects.
 
@@ -66,8 +67,7 @@ class ConnectionManager:
         """Connect to the target, or reconnect a dropped connection."""
         if self._is_connected:
             _LOGGER.debug(
-                "Already connected to %s:%d, reconnecting",
-                self._host, self._port
+                "Already connected to %s:%d, reconnecting", self._host, self._port
             )
             await self.destroy_socket()
 
@@ -78,11 +78,13 @@ class ConnectionManager:
             )
             self.set_connection_state(True)
             _LOGGER.debug("Connected to %s:%d", self._host, self._port)
-        except Exception as e: # noqa: BLE001
+        except Exception as e:  # noqa: BLE001
             self.set_connection_state(False)
             _LOGGER.error(
                 "Encountered an error trying to connect to %s:%d: %s",
-                self._host, self._port, repr(e)
+                self._host,
+                self._port,
+                repr(e),
             )
 
     async def destroy_socket(self):
@@ -92,8 +94,8 @@ class ConnectionManager:
         """
         self.set_connection_state(False)
         if self._socket_writer is None:
-          # no socket to destroy
-          return
+            # no socket to destroy
+            return
 
         if not self._socket_writer.is_closing():
             self._socket_writer.close()  # writer controls the underlying socket
@@ -116,6 +118,7 @@ class ConnectionManager:
 
     async def ping_watchdog(self, task_group_to_cancel: asyncio.TaskGroup):
         """Run a continuous check that the connection isn't dead."""
+
         class TGErr(Exception):
             """Artificial exception to kill task group."""
 
@@ -131,10 +134,11 @@ class ConnectionManager:
                 diff = int(now - self._most_recent_message_timestamp)
                 if diff > TIMEOUT_SECS:
                     _LOGGER.warning(
-                            "Last message from %s is %d seconds old. "
-                            "Assuming connection is dead",
-                            self._host,
-                            diff)
+                        "Last message from %s is %d seconds old. "
+                        "Assuming connection is dead",
+                        self._host,
+                        diff,
+                    )
                     self.set_connection_state(False)
                     task_group_to_cancel.create_task(kill_task_group_task())
                     _LOGGER.debug("Leaving ping watchdog")
@@ -191,7 +195,7 @@ class ConnectionManager:
                     _LOGGER.warning("Connection to %s:%d lost", self._host, self._port)
                 except asyncio.CancelledError:
                     _LOGGER.debug("Got cancellation from watchdog, aborting")
-                except Exception as e: # noqa: BLE001
+                except Exception as e:  # noqa: BLE001
                     _LOGGER.error("Unexpected exception: %s", repr(e))
                 finally:
                     _LOGGER.debug("Exited rec loop")
@@ -205,7 +209,7 @@ class ConnectionManager:
                         await self.send(d)
                 except asyncio.CancelledError:
                     _LOGGER.debug("Send task got cancellation; cleaning up")
-                except Exception as e: # noqa: BLE001
+                except Exception as e:  # noqa: BLE001
                     _LOGGER.error(str(e))
                 finally:
                     _LOGGER.debug("Exited send loop")
@@ -220,8 +224,9 @@ class ConnectionManager:
             watchdog_task.cancel()
             await watchdog_task
 
-            _LOGGER.warning("Disconnected from %s:%d; will reconnect",
-                            self._host, self._port)
+            _LOGGER.warning(
+                "Disconnected from %s:%d; will reconnect", self._host, self._port
+            )
             await asyncio.sleep(2)
 
         _LOGGER.info("Shutting down connection to %s:%d", self._host, self._port)

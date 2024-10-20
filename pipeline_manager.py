@@ -18,6 +18,7 @@ _LOGGER = logging.getLogger(__name__)
 # Maximum number of chunks in the queue before dumping
 QUEUE_MAX_CHUNKS = 2048
 
+
 class QueueAsyncIterable:
     """Wrapper around an asyncio queue that provides AsyncIterable[bytes]."""
 
@@ -37,7 +38,13 @@ class QueueAsyncIterable:
 class PipelineManager:
     """Manages the connection to the assist pipeline."""
 
-    def __init__(self, hass: HomeAssistant, entry: ConfigEntry, device: DeviceEntry, event_callback: PipelineEventCallback):
+    def __init__(
+        self,
+        hass: HomeAssistant,
+        entry: ConfigEntry,
+        device: DeviceEntry,
+        event_callback: PipelineEventCallback,
+    ):
         """Construct a new manager."""
         self._hass: HomeAssistant = hass
         self._entry: ConfigEntry = entry
@@ -54,31 +61,31 @@ class PipelineManager:
         while True:
             try:
                 await assist_pipeline.async_pipeline_from_audio_stream(
-                        hass=self._hass,
-                        context=Context(),
-                        event_callback=self._event_callback,
-                        stt_stream=self._stream,
-                        stt_metadata=stt.SpeechMetadata(
-                          language = "",
-                          format=stt.AudioFormats.WAV,
-                          codec=stt.AudioCodecs.PCM,
-                          bit_rate=stt.AudioBitRates.BITRATE_16,
-                          sample_rate=stt.AudioSampleRates.SAMPLERATE_16000,
-                          channel=stt.AudioChannels.CHANNEL_MONO,
-                        ),
-                        start_stage=PipelineStage.WAKE_WORD,
-                        device_id = self._device.id,
-                        )
+                    hass=self._hass,
+                    context=Context(),
+                    event_callback=self._event_callback,
+                    stt_stream=self._stream,
+                    stt_metadata=stt.SpeechMetadata(
+                        language="",
+                        format=stt.AudioFormats.WAV,
+                        codec=stt.AudioCodecs.PCM,
+                        bit_rate=stt.AudioBitRates.BITRATE_16,
+                        sample_rate=stt.AudioSampleRates.SAMPLERATE_16000,
+                        channel=stt.AudioChannels.CHANNEL_MONO,
+                    ),
+                    start_stage=PipelineStage.WAKE_WORD,
+                    device_id=self._device.id,
+                )
 
                 _LOGGER.debug("Pipeline finished, starting over")
             except WakeWordDetectionError as e:
                 if e.code == "wake-provider-missing":
-                    _LOGGER.warning("Wakeword provider missing from pipeline.  Maybe not set up yet? Waiting and trying again.")
+                    _LOGGER.warning(
+                        "Wakeword provider missing from pipeline.  Maybe not set up yet? Waiting and trying again."
+                    )
                     await asyncio.sleep(2)
                 else:
                     raise
-
-
 
     def enqueue_chunk(self, chunk: bytes):
         """Enqueue an audio chunk, or clear the queue if it's full."""

@@ -30,7 +30,7 @@ PROPERTIES_META_INFO = {
     },
     "pipeline_state": {
         "icon": "mdi:assistant",
-    }
+    },
 }
 
 # Possible states for sensors
