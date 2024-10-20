@@ -6,6 +6,9 @@ import json
 import logging
 import time
 
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+
 from .exceptions import BadMessageException
 
 _LOGGER = logging.getLogger(__name__)
@@ -29,6 +32,8 @@ class ConnectionManager:
         self,
         host: str,
         port: int,
+        hass: HomeAssistant,
+        config_entry: ConfigEntry,
         recv_fn,  # unclear how to type-hint this
         connection_state_callback,
     ) -> None:
@@ -38,6 +43,9 @@ class ConnectionManager:
 
         self._host = host
         self._port = port
+
+        self._hass = hass
+        self._config_entry = config_entry
 
         # track the time of the most recent message
         self._most_recent_message_timestamp = time.time()
@@ -127,15 +135,15 @@ class ConnectionManager:
     class TGErr(Exception):
         """Artificial exception to kill task group."""
 
-    async def ping_watchdog(self, task_group_to_cancel: asyncio.TaskGroup):
+    async def ping_watchdog(self):
         """Run a continuous check that the connection isn't dead."""
 
         async def kill_task_group_task():
-            raise TGErr
+            raise self.TGErr()
 
         try:
             _LOGGER.debug("Starting ping watchdog")
-            while True:
+            while self._is_connected:
                 # give messages a chance to come in
                 await asyncio.sleep(TIMEOUT_SECS)
                 now = time.time()
@@ -148,16 +156,13 @@ class ConnectionManager:
                         diff,
                     )
                     self.set_connection_state(False)
-                    task_group_to_cancel.create_task(kill_task_group_task())
+                    # task_group_to_cancel.create_task(kill_task_group_task())
                     _LOGGER.debug("Leaving ping watchdog")
-                    return
                 await asyncio.sleep(1)
-        except TGErr:
+        except self.TGErr:
             pass
         finally:
             _LOGGER.debug("Stopping ping watchdog")
-
-        return
 
     async def send(self, data: dict):
         """Send some data over the socket, if connected."""
@@ -220,7 +225,7 @@ class ConnectionManager:
             async def send_loop():
                 """Loop over messages in the outbox and send them."""
                 try:
-                    while True:
+                    while self._is_connected:
                         d = await self._outbox.get()
                         _LOGGER.debug("Sending from queue: `%s`", str(d))
                         await self.send(d)
@@ -239,27 +244,34 @@ class ConnectionManager:
                 #    watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
                 #    _LOGGER.debug("Created watchdog task")
 
-                net_loop_task = asyncio.create_task(do_net_loop())
-                send_loop_task = asyncio.create_task(send_loop())
+                net_loop_task = self._config_entry.async_create_background_task(
+                    self._hass, do_net_loop(), "hassmic_net_loop"
+                )
+                send_loop_task = self._config_entry.async_create_background_task(
+                    self._hass, send_loop(), "hassmic_send_loop"
+                )
 
-                watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
+                watchdog_task = self._config_entry.async_create_background_task(
+                    self._hass, self.ping_watchdog(), "hassmic_watchdog"
+                )
                 _LOGGER.debug("Created watchdog task")
 
-                _LOGGER.debug("Waiting on rec/send tasks")
-                await asyncio.gather(net_loop_task, send_loop_task)
+                # _LOGGER.debug("Waiting on rec/send tasks")
+                # await asyncio.gather(net_loop_task, send_loop_task)
 
-                _LOGGER.debug("Waiting on watchdog")
-                watchdog_task.cancel()
-                await watchdog_task
-                _LOGGER.debug("Watchdog done")
+                # _LOGGER.debug("Waiting on watchdog")
+                ##watchdog_task.cancel()
+                # await watchdog_task
+                # _LOGGER.debug("Watchdog done")
+                while self._is_connected:
+                    await asyncio.sleep(10)
 
-            except* TGErr:
+            except* self.TGErr:
                 _LOGGER.debug("TGErr")
-                pass
 
             _LOGGER.debug("Cancelling watchdog task")
-            watchdog_task.cancel()
-            await watchdog_task
+            # watchdog_task.cancel()
+            # await watchdog_task
             _LOGGER.debug("Watchdog task awaited ok")
 
             _LOGGER.warning(

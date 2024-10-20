@@ -6,8 +6,8 @@ import logging
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo, Entity
 from homeassistant.helpers import device_registry
+from homeassistant.helpers.entity import DeviceInfo, Entity
 
 from . import const
 from .hassmic import HassMic
@@ -48,5 +48,9 @@ async def config_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
+    _LOGGER.debug("Stopping the hassmic")
     await entry.runtime_data.stop()
-    return await hass.config_entries.async_unload_platforms(entry, const.PLATFORMS)
+    _LOGGER.debug("Hassmic stop ok, waiting on unload_platforms")
+    ok = await hass.config_entries.async_unload_platforms(entry, const.PLATFORMS)
+    _LOGGER.debug("Unload platforms: %s", str(ok))
+    return ok

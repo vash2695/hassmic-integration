@@ -12,8 +12,8 @@ from homeassistant.components.assist_pipeline.pipeline import (
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.device_registry import DeviceEntry
+from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.network import NoURLAvailableError, get_url
 
 from .connection_manager import ConnectionManager
@@ -101,6 +101,8 @@ class HassMic:
         self._connection_manager = ConnectionManager(
             host=self._host,
             port=self._port,
+            hass=hass,
+            config_entry=entry,
             recv_fn=self.handle_incoming_message,
             connection_state_callback=self._handle_connection_state_change,
         )

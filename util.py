@@ -2,10 +2,11 @@
 
 import re
 
-from . import const
-from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
 from homeassistant.helpers.entity import DeviceInfo, Entity, generate_entity_id
+
+from . import const
 
 
 def InitializeEntity(

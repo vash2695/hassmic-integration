@@ -2,9 +2,7 @@
 
 from __future__ import annotations
 
-import enum
 import logging
-import re
 
 from homeassistant.components.assist_pipeline.pipeline import (
     PipelineEvent,
@@ -14,10 +12,7 @@ from homeassistant.components.sensor import ENTITY_ID_FORMAT, SensorEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import STATE_IDLE
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers.entity import DeviceInfo, generate_entity_id
-from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .. import const
 from .. import util
 
 _LOGGER = logging.getLogger(__name__)
@@ -54,7 +49,6 @@ class SensorBase(SensorEntity):
 
     def on_pipeline_event(self, event: PipelineEvent):
         """This method gets overridden to handle pipeline events for sensors."""
-        pass
 
     def handle_pipeline_event(self, event: PipelineEvent):
         """Handle a `PipelineEvent` by calling on_pipeline_event()."""

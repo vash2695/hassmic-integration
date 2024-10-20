@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from . import base
-import enum
 import logging
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.components.assist_pipeline.pipeline import (
     PipelineEvent,
     PipelineEventType,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+
+from . import base
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -37,7 +37,8 @@ class SimpleState(base.SensorBase):
             """Convert a pipeline state into a simple string representation if it
             should change the sensor value.
 
-            Return None if the sensor value shouldn't change."""
+            Return None if the sensor value shouldn't change.
+            """
             match t:
                 case PipelineEventType.ERROR:
                     return "error-error"

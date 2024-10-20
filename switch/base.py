@@ -4,20 +4,15 @@ from __future__ import annotations
 
 import logging
 
-from homeassistant.components.assist_pipeline.pipeline import (
-    PipelineEvent,
-    PipelineEventType,
-)
+from homeassistant.components.assist_pipeline.pipeline import PipelineEvent
 from homeassistant.components.switch import (
     ENTITY_ID_FORMAT,
-    SwitchEntity,
     SwitchDeviceClass,
+    SwitchEntity,
 )
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.const import STATE_ON, STATE_OFF
 from homeassistant.core import HomeAssistant
 
-from .. import const
 from .. import util
 
 _LOGGER = logging.getLogger(__name__)
@@ -56,7 +51,6 @@ class SwitchBase(SwitchEntity):
 
     def on_pipeline_event(self, event: PipelineEvent):
         """This method gets overridden to handle pipeline events for switches."""
-        pass
 
     def handle_pipeline_event(self, event: PipelineEvent):
         """Handle a `PipelineEvent` by calling on_pipeline_event()."""

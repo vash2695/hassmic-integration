@@ -2,16 +2,16 @@
 
 from __future__ import annotations
 
-from . import base
-import enum
 import logging
 
-from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
 from homeassistant.components.assist_pipeline.pipeline import (
     PipelineEvent,
     PipelineEventType,
 )
+from homeassistant.config_entries import ConfigEntry
+from homeassistant.core import HomeAssistant
+
+from . import base
 
 _LOGGER = logging.getLogger(__name__)
 
