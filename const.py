@@ -25,10 +25,10 @@ PROPERTIES_META_INFO = {
     "intent": {
         "icon": "mdi:brain",
     },
-    "tts": {
-        "icon": "mdi:speaker-message",
+    "simple_state": {
+        "icon": "mdi:state-machine",
     },
-    "state": {
+    "pipeline_state": {
         "icon": "mdi:assistant",
     }
 }

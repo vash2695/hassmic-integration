@@ -35,8 +35,11 @@ class WhichSensor(enum.StrEnum):
     # Intent of curent run
     INTENT = "intent"
 
+    # Simple state, primarily useful for view assist or other automations
+    SIMPLE_STATE = "simple_state"
+
     # Overall current pipeline state
-    STATE = "state"
+    PIPELINE_STATE = "pipeline_state"
 
 async def async_setup_entry(
     hass: HomeAssistant,
@@ -80,13 +83,39 @@ class hassmicSensorEntity(SensorEntity):
         if not self.available:
           return
 
-        # For the state sensor, just set the state to the event type and don't
-        # do any processing.
-        if self._key == WhichSensor.STATE:
+        # For the pipeline state sensor, just set the state to the event type
+        # and don't do any processing.
+        if self._key == WhichSensor.PIPELINE_STATE:
             self._attr_native_value = event.type
             self.attr_extra_state_attributes = event.data
             self.schedule_update_ha_state()
             return
+
+        # We also have a "simple state" sensor, for view assist
+        # This translates key events in the pipeline into more-easily-parsible
+        # "stage-status" strings.
+        if self._key == WhichSensor.SIMPLE_STATE:
+            def getSimpleState() -> str:
+                match event.type:
+                    case PipelineEventType.ERROR:
+                        return "error-error"
+                    case PipelineEventType.WAKE_WORD_START:
+                        return "wake_word-listening"
+                    case PipelineEventType.STT_START:
+                        return "stt-listening"
+                    case PipelineEventType.INTENT_START:
+                        return "intent-processing"
+                    case PipelineEventType.TTS_START:
+                        return "tts-generating"
+                    case PipelineEventType.TTS_END:
+                        return "tts-speaking"
+                    case _:
+                        return None
+
+            s = getSimpleState()
+            if s is not None:
+                self._attr_native_value = getSimpleState()
+
 
 
         match event.type:
@@ -129,6 +158,9 @@ class hassmicSensorEntity(SensorEntity):
                             txt if len(txt) <= 255
                             else (txt[:252] + "...").strip()
                             )
+                        self._attr_extra_state_attributes = {
+                            "speech": txt,
+                        }
 
             # Do nothing for INTENT_START
             case PipelineEventType.INTENT_START:
@@ -168,8 +200,8 @@ class hassmicSensorEntity(SensorEntity):
                         else (speech[:252] + "...").strip()
                         )
                     self._attr_extra_state_attributes = {
-                            **event.data,
-                            'speech_output': speech,
+                        **event.data,
+                        'speech_output': speech,
                     }
 
             # Do nothing for TTS_START
