@@ -40,23 +40,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     return True
 
 
-def init_entity(entity: Entity, key: str, config_entry: ConfigEntry) -> str:
-    """Initialize the deviceinfo and other metadata for an entity.
-
-    "key" is the unique name within this device for the given entity (ie "wake" or
-    "tts").
-    """
-    unique_id = config_entry.unique_id
-    entity.unique_id = f"{unique_id}-{key}"
-    entity.name = config_entry.title + " " + key.upper().replace("_", " ")
-    entity.icon = const.PROPERTIES_META_INFO.get(key, {}).get("icon", "mdi:numeric-0")
-    entity.device_info = DeviceInfo(
-        identifiers={(const.DOMAIN, unique_id)},
-    )
-
-    config_entry.runtime_data.register_entity(entity)
-
-
 async def config_entry_update_listener(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Update listener, called when the config entry options are changed."""
     await hass.config_entries.async_reload(entry.entry_id)
