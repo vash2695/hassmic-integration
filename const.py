@@ -10,29 +10,6 @@ PLATFORMS = [
     Platform.SENSOR,
 ]
 
-# An information struct for the generated properties (read-only entities) that
-# this integration provides
-PROPERTIES_META_INFO = {
-    "mic": {
-        "icon": "mdi:microphone",
-    },
-    "wake": {
-        "icon": "mdi:chat-alert-outline",
-    },
-    "stt": {
-        "icon": "mdi:ear-hearing",
-    },
-    "intent": {
-        "icon": "mdi:brain",
-    },
-    "simple_state": {
-        "icon": "mdi:state-machine",
-    },
-    "pipeline_state": {
-        "icon": "mdi:assistant",
-    },
-}
-
 # Possible states for sensors
 STATE_LISTENING = "listening"
 STATE_DETECTED = "detected"
