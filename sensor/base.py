@@ -14,6 +14,7 @@ from homeassistant.const import STATE_IDLE
 from homeassistant.core import HomeAssistant
 
 from .. import util
+from ..const import STATE_ERROR
 
 _LOGGER = logging.getLogger(__name__)
 

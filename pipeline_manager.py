@@ -150,6 +150,9 @@ class PipelineManager:
                 self._should_close = True
                 break
 
+            except Exception as e:
+                _LOGGER.error("Got unhandled error: %s", str(e))
+
         self._running = False
         _LOGGER.debug("Pipeline manager exiting")
 
