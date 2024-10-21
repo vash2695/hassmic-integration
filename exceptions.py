@@ -7,3 +7,7 @@ class BadMessageException(Exception):
 
 class BadHassMicClientInfoException(Exception):
     """Exception type asserts a bad opening info message."""
+
+
+class AlreadyRunningException(Exception):
+    """Exception type asserts a task was asked to start that's already running."""

@@ -62,14 +62,16 @@ class ConnectionManager:
         self.set_connection_state(False)
         self._should_close = False
 
+        # Track the tasks we might start
+        self._rec_loop_task = None
+        self._send_loop_task = None
+        self._watchdog_task = None
+
     def set_connection_state(self, s: bool):
         """Update the internal connection state."""
         self._is_connected = s
         if self._conn_state_callback and callable(self._conn_state_callback):
-            _LOGGER.debug("Calling state callback %s", repr(s))
             self._conn_state_callback(s)
-        else:
-            _LOGGER.debug("NOT calling state callback")
 
     async def reconnect(self) -> None:
         """Connect to the target, or reconnect a dropped connection."""
@@ -123,6 +125,10 @@ class ConnectionManager:
         """Request close of this conn manager."""
         _LOGGER.debug("Closing conn manager")
         self._should_close = True
+        self._task.cancel()
+        await self._task
+
+        _LOGGER.debug("Stopped tasks, closing socket")
 
         # ignore connection errors when we're trying to close the connection
         # anyways
@@ -132,37 +138,26 @@ class ConnectionManager:
 
         _LOGGER.debug("Conn manager closed ok")
 
-    class TGErr(Exception):
-        """Artificial exception to kill task group."""
-
-    async def ping_watchdog(self):
+    async def _ping_watchdog(self):
         """Run a continuous check that the connection isn't dead."""
 
-        async def kill_task_group_task():
-            raise self.TGErr()
-
-        try:
-            _LOGGER.debug("Starting ping watchdog")
-            while self._is_connected:
-                # give messages a chance to come in
-                await asyncio.sleep(TIMEOUT_SECS)
-                now = time.time()
-                diff = int(now - self._most_recent_message_timestamp)
-                if diff > TIMEOUT_SECS:
-                    _LOGGER.warning(
-                        "Last message from %s is %d seconds old. "
-                        "Assuming connection is dead",
-                        self._host,
-                        diff,
-                    )
-                    self.set_connection_state(False)
-                    # task_group_to_cancel.create_task(kill_task_group_task())
-                    _LOGGER.debug("Leaving ping watchdog")
-                await asyncio.sleep(1)
-        except self.TGErr:
-            pass
-        finally:
-            _LOGGER.debug("Stopping ping watchdog")
+        _LOGGER.debug("Starting ping watchdog")
+        while self._is_connected and not self._should_close:
+            # give messages a chance to come in
+            await asyncio.sleep(TIMEOUT_SECS)
+            now = time.time()
+            diff = int(now - self._most_recent_message_timestamp)
+            if diff > TIMEOUT_SECS:
+                _LOGGER.warning(
+                    "Last message from %s is %d seconds old. "
+                    "Assuming connection is dead",
+                    self._host,
+                    diff,
+                )
+                self.set_connection_state(False)
+                _LOGGER.debug("Leaving ping watchdog")
+            await asyncio.sleep(1)
+        _LOGGER.debug("Stopping ping watchdog")
 
     async def send(self, data: dict):
         """Send some data over the socket, if connected."""
@@ -176,108 +171,99 @@ class ConnectionManager:
         """Enqueue data to be sent synchronously."""
         self._outbox.put_nowait(data)
 
-    async def run(self):
+    def run(self):
+        self._task = self._config_entry.async_create_background_task(
+            self._hass, self._loop(), name="hassmic_connection"
+        )
+
+    async def _rec_loop(self):
+        try:
+            is_eof = False
+            bad_messages = 0  # track consecutive bad messages
+            while self._is_connected and not is_eof and not self._should_close:
+                try:
+                    # If we wait for more than two seconds, cancel the
+                    # attempt and try again. This means that we'll
+                    # reevaluate should_close
+                    msg = await asyncio.wait_for(
+                        self._recv_fn(self._socket_reader), timeout=2.0
+                    )
+                    if msg is None:
+                        _LOGGER.debug("Got EOF")
+                        is_eof = True
+                        self.set_connection_state(False)
+                    self._most_recent_message_timestamp = time.time()
+                except BadMessageException as e:
+                    _LOGGER.error(repr(e))
+                    bad_messages += 1
+                    if bad_messages >= MAX_CONSECUTIVE_BAD_MESSAGES:
+                        _LOGGER.error(
+                            "Reached threshold for consecutive bad messages; reconnecting"
+                        )
+                        await self.reconnect()
+                        bad_messages = 0
+                    continue
+                except TimeoutError:
+                    continue
+
+                bad_messages = 0
+        except ConnectionResetError:
+            _LOGGER.warning("Connection to %s:%d lost", self._host, self._port)
+        except asyncio.CancelledError:
+            _LOGGER.debug("Rec loop got cancellation, cleaning up")
+        except Exception as e:  # noqa: BLE001
+            _LOGGER.error("Unexpected exception: %s", repr(e))
+        finally:
+            _LOGGER.debug("Exited rec loop")
+
+    async def _send_loop(self):
+        """Loop over messages in the outbox and send them."""
+        try:
+            while self._is_connected and not self._should_close:
+                d = await self._outbox.get()
+                _LOGGER.debug("Sending from queue: `%s`", str(d))
+                await self.send(d)
+        except asyncio.CancelledError:
+            _LOGGER.debug("Send task got cancellation; cleaning up")
+        finally:
+            _LOGGER.debug("Exited send loop")
+
+    async def _loop(self):
         """Run the network management loop."""
         _LOGGER.info("Starting network tasks for %s:%d", self._host, self._port)
-        while not self._should_close:
-            await self.reconnect()
-
-            async def do_net_loop():
-                try:
-                    is_eof = False
-                    bad_messages = 0  # track consecutive bad messages
-                    while self._is_connected and not is_eof and not self._should_close:
-                        try:
-                            # If we wait for more than two seconds, cancel the
-                            # attempt and try again. This means that we'll
-                            # reevaluate should_close
-                            msg = await asyncio.wait_for(
-                                self._recv_fn(self._socket_reader), timeout=2.0
-                            )
-                            if msg is None:
-                                _LOGGER.debug("Got EOF")
-                                is_eof = True
-                                self.set_connection_state(False)
-                            self._most_recent_message_timestamp = time.time()
-                        except BadMessageException as e:
-                            _LOGGER.error(repr(e))
-                            bad_messages += 1
-                            if bad_messages >= MAX_CONSECUTIVE_BAD_MESSAGES:
-                                _LOGGER.error(
-                                    "Reached threshold for consecutive bad messages; reconnecting"
-                                )
-                                await self.reconnect()
-                                bad_messages = 0
-                            continue
-                        except TimeoutError:
-                            continue
-
-                        bad_messages = 0
-                except ConnectionResetError:
-                    _LOGGER.warning("Connection to %s:%d lost", self._host, self._port)
-                except asyncio.CancelledError:
-                    _LOGGER.debug("Got cancellation from watchdog, aborting")
-                except Exception as e:  # noqa: BLE001
-                    _LOGGER.error("Unexpected exception: %s", repr(e))
-                finally:
-                    _LOGGER.debug("Exited rec loop")
-
-            async def send_loop():
-                """Loop over messages in the outbox and send them."""
-                try:
-                    while self._is_connected:
-                        d = await self._outbox.get()
-                        _LOGGER.debug("Sending from queue: `%s`", str(d))
-                        await self.send(d)
-                except asyncio.CancelledError:
-                    _LOGGER.debug("Send task got cancellation; cleaning up")
-                finally:
-                    _LOGGER.debug("Exited send loop")
-
-            watchdog_task = None
-            try:
-                # async with asyncio.TaskGroup() as tg:
-                #    _LOGGER.debug("Created task group")
-                #    net_loop_task = tg.create_task(do_net_loop())
-                #    send_loop_task = tg.create_task(send_loop())
-
-                #    watchdog_task = asyncio.create_task(self.ping_watchdog(tg))
-                #    _LOGGER.debug("Created watchdog task")
-
-                net_loop_task = self._config_entry.async_create_background_task(
-                    self._hass, do_net_loop(), "hassmic_net_loop"
+        try:
+            while not self._should_close:
+                await self.reconnect()
+                self._rec_loop_task = self._config_entry.async_create_background_task(
+                    self._hass, self._rec_loop(), "hassmic_rec_loop"
                 )
-                send_loop_task = self._config_entry.async_create_background_task(
-                    self._hass, send_loop(), "hassmic_send_loop"
+                self._send_loop_task = self._config_entry.async_create_background_task(
+                    self._hass, self._send_loop(), "hassmic_send_loop"
                 )
-
-                watchdog_task = self._config_entry.async_create_background_task(
-                    self._hass, self.ping_watchdog(), "hassmic_watchdog"
+                self._watchdog_task = self._config_entry.async_create_background_task(
+                    self._hass, self._ping_watchdog(), "hassmic_watchdog"
                 )
                 _LOGGER.debug("Created watchdog task")
 
-                # _LOGGER.debug("Waiting on rec/send tasks")
-                # await asyncio.gather(net_loop_task, send_loop_task)
+                while self._is_connected and not self._should_close:
+                    await asyncio.sleep(1)
 
-                # _LOGGER.debug("Waiting on watchdog")
-                ##watchdog_task.cancel()
-                # await watchdog_task
-                # _LOGGER.debug("Watchdog done")
-                while self._is_connected:
-                    await asyncio.sleep(10)
+                if self._should_close:
+                    _LOGGER.info("Disconnected from %s:%d", self._host, self._port)
+                else:
+                    _LOGGER.warning(
+                        "Disconnected from %s:%d; will reconnect",
+                        self._host,
+                        self._port,
+                    )
+                await asyncio.sleep(1)
 
-            except* self.TGErr:
-                _LOGGER.debug("TGErr")
+            _LOGGER.info("Shutting down connection to %s:%d", self._host, self._port)
+        except asyncio.CancelledError:
+            _LOGGER.debug("Connection manager main loop caught cancel signal")
 
-            _LOGGER.debug("Cancelling watchdog task")
-            # watchdog_task.cancel()
-            # await watchdog_task
-            _LOGGER.debug("Watchdog task awaited ok")
+        self._rec_loop_task.cancel()
+        self._send_loop_task.cancel()
+        self._watchdog_task.cancel()
 
-            _LOGGER.warning(
-                "Disconnected from %s:%d; will reconnect", self._host, self._port
-            )
-            await asyncio.sleep(2)
-
-        _LOGGER.info("Shutting down connection to %s:%d", self._host, self._port)
         await self.destroy_socket()

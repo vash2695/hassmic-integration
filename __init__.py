@@ -36,6 +36,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     await hass.config_entries.async_forward_entry_setups(entry, const.PLATFORMS)
 
     entry.async_on_unload(entry.add_update_listener(config_entry_update_listener))
+    entry.async_on_unload(entry.runtime_data.stop)
 
     return True
 
@@ -49,8 +50,9 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
 
     _LOGGER.debug("Stopping the hassmic")
-    await entry.runtime_data.stop()
-    _LOGGER.debug("Hassmic stop ok, waiting on unload_platforms")
+    # await entry.runtime_data.stop()
+    # _LOGGER.debug("Hassmic stop ok, waiting on unload_platforms")
     ok = await hass.config_entries.async_unload_platforms(entry, const.PLATFORMS)
     _LOGGER.debug("Unload platforms: %s", str(ok))
+    _LOGGER.debug("Unloaded hassmic")
     return ok

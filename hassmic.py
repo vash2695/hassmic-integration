@@ -111,13 +111,8 @@ class HassMic:
             hass, entry, self._device, self._pipeline_event_callback
         )
 
-        entry.async_create_background_task(
-            hass, self._connection_manager.run(), name="hassmic_connection"
-        )
-
-        entry.async_create_background_task(
-            hass, self._pipeline_manager.run(), name="hassmic_pipeline"
-        )
+        self._connection_manager.run()
+        self._pipeline_manager.run()
 
     def register_entity(self, ent: Entity):
         """Add an entity to the list of entities generated for this hassmic."""
@@ -175,7 +170,9 @@ class HassMic:
 
     async def stop(self):
         """Shut down instance."""
-        await self._connection_manager.close()
+        await asyncio.gather(
+            self._connection_manager.close(), self._pipeline_manager.close()
+        )
 
     async def handle_incoming_message(self, reader) -> Message:
         """Wrap recv_message and dispatches recieved messages appropriately."""
