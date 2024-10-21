@@ -25,13 +25,9 @@ IP address (or hostname). The port should remain set to the default, `11700`.
 It is currently in active development and probably has lots of bugs. Some
 highlights:
 
-- Deleting or disabling instances usually requires restarting Home Assistant
 - There is currently **NO configurability**. HassMic uses your default assist
   pipeline, default wakework, and default text-to-speech engine, and outputs the
   result through the HassMic app. All of this will be improving soon!
-- The integration can usually handle satellite device restarts or app crashes,
-  but not always. You may need to reload the device or restart home assistant if
-  it gets stuck.
 
 Please report all other bugs using the issue tracker!
 
