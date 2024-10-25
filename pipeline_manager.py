@@ -8,6 +8,7 @@ from homeassistant.components.assist_pipeline.error import WakeWordDetectionErro
 from homeassistant.components.assist_pipeline.pipeline import (
     PipelineEventCallback,
     PipelineStage,
+    WakeWordSettings,
 )
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import Context, HomeAssistant
@@ -19,6 +20,9 @@ _LOGGER = logging.getLogger(__name__)
 
 # Maximum number of chunks in the queue before dumping
 QUEUE_MAX_CHUNKS = 2048
+
+# How long to wait for the wakeword before restarting the pipeline
+WAKE_WORD_TIMEOUT_SECONDS = 60
 
 
 class QueueAsyncIterable:
@@ -131,6 +135,9 @@ class PipelineManager:
                         bit_rate=stt.AudioBitRates.BITRATE_16,
                         sample_rate=stt.AudioSampleRates.SAMPLERATE_16000,
                         channel=stt.AudioChannels.CHANNEL_MONO,
+                    ),
+                    wake_word_settings=WakeWordSettings(
+                        timeout=WAKE_WORD_TIMEOUT_SECONDS,
                     ),
                     start_stage=PipelineStage.WAKE_WORD,
                     device_id=self._device.id,
